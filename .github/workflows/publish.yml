@@ -1,0 +1,30 @@
+# upload 브랜치에 올린 조각을 하나로 합쳐 Releases에 설치 파일을 올리고, 조각 브랜치는 지운다.
+name: publish
+on:
+  push:
+    branches: [upload]
+permissions:
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 합치고 확인
+        run: |
+          ver=$(cat parts/VERSION)
+          cat parts/setup.part* > AI-Detector-Setup.exe
+          echo "$(cat parts/SHA256)  AI-Detector-Setup.exe" | sha256sum -c -
+          mkdir pkg && cp AI-Detector-Setup.exe pkg/
+          printf '1. AI-Detector-Setup.exe 를 두 번 클릭하세요.\r\n2. "Windows의 PC 보호" 창이 뜨면 "추가 정보" -> "실행"을 누르세요.\r\n3. 설치가 끝나면 바탕화면의 "AI 글 탐지기" 아이콘으로 켜세요.\r\n4. 처음 한 번은 AI 모델(약 2.7GB)을 내려받아요.\r\n' > "pkg/설치 방법.txt"
+          (cd pkg && zip -0 -q ../AI-Detector-Setup.zip *)
+          echo "VER=$ver" >> $GITHUB_ENV
+      - name: 릴리스 만들기
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete "v$VER" -y --cleanup-tag 2>/dev/null || true
+          gh release create "v$VER" AI-Detector-Setup.exe AI-Detector-Setup.zip --target main --latest \
+            --title "AI 글 탐지기 $VER" --notes "Windows 10/11용 설치 파일이에요. 브라우저가 .exe를 막으면 .zip을 받아 압축을 풀고 실행하세요. 'Windows의 PC 보호' 창이 뜨면 '추가 정보' → '실행'을 누르세요."
+      - name: 조각 브랜치 지우기
+        run: git push origin --delete upload
